@@ -33,9 +33,9 @@ class BaseStream(ABC):
     headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
     children = []
     parent = ""
-    data_key = ""
+    data_key = "submissions"
     parent_bookmark_key = ""
-    http_method = "POST"
+    http_method = "GET"
 
     def __init__(self, client=None, catalog=None) -> None:
         self.client = client
