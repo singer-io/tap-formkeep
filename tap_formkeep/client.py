@@ -64,7 +64,11 @@ class Client:
 
     def authenticate(self, headers: Dict, params: Dict) -> Tuple[Dict, Dict]:
         """Authenticates the request with the token"""
-        headers["Authorization"] = self.config["api_token"]
+        headers = {
+        "Authorization": f"Token {self.config['api_token']}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+        (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
         return headers, params
 
     def make_request(

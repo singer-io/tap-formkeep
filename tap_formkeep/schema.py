@@ -4,6 +4,7 @@ import singer
 from typing import Dict, Tuple
 from singer import metadata
 from tap_formkeep.streams import STREAMS
+import re
 
 LOGGER = singer.get_logger()
 
@@ -78,3 +79,117 @@ def get_schemas() -> Tuple[Dict, Dict]:
 
     return schemas, field_metadata
 
+DATE_REGEX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+TIME_REGEX = re.compile(r"^\d{2}:\d{2}(:\d{2})?$")
+DATETIME_REGEX = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(Z|[\+\-]\d{2}:\d{2}| UTC)?$"
+)
+
+def infer_type(value):
+    if value is None:
+        return ["null", "string"]
+
+    if isinstance(value, bool):
+        return ["null", "boolean"]
+
+    if isinstance(value, int):
+        return ["null", "integer"]
+
+    if isinstance(value, float):
+        return ["null", "number"]
+
+    if isinstance(value, list):
+        return ["null", "array"]
+
+    if isinstance(value, dict):
+        return ["null", "object"]
+
+    if isinstance(value, str):
+        # Only datetime gets format
+        if DATETIME_REGEX.match(value):
+            return {"type": ["null", "string"], "format": "date-time"}
+
+        # Date-only (YYYY-MM-DD) → treat as plain string
+        if DATE_REGEX.match(value):
+            return ["null", "string"]
+
+        # Time-only → plain string
+        if TIME_REGEX.match(value):
+            return ["null", "string"]
+
+        return ["null", "string"]
+
+    return ["null", "string"]
+
+def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
+    schemas = {}
+    field_metadata = {}
+    refs = load_schema_references()
+
+    form_ids = config.get("form_ids", [])
+
+    for form_id in form_ids:
+        LOGGER.info(f"Fetching schema for FormKeep form")
+
+        response = client.make_request(
+            method="GET",
+            endpoint=client.base_url.format(form_id=form_id),
+            params={
+                "page": 1,
+                "include_attachments": "true",
+                "spam": "false"
+            }
+        )
+
+        submissions = response.get("submissions", [])
+        if not submissions:
+            LOGGER.warning(f"No submissions found for form {form_id}. Skipping.")
+            continue
+
+        # ========== BUILD DYNAMIC DATA SCHEMA ==========
+        data_properties = {}
+
+        for submission in submissions:
+            data_obj = submission.get("data", {})
+            for key, value in data_obj.items():
+                if key not in data_properties:
+                    inferred = infer_type(value)
+
+                    if isinstance(inferred, dict):
+                        data_properties[key] = inferred
+                    else:
+                        data_properties[key] = {"type": inferred}
+
+        # ========== BUILD FINAL SINGER SCHEMA ==========
+        schema = {
+            "type": "object",
+            "properties": {
+                "id": {"type": ["null", "integer"]},
+                "created_at": {"type": ["null", "string"], "format": "date-time"},
+                "spam": {"type": ["null", "boolean"]},
+                "data": {
+                    "type": "object",
+                    "properties": data_properties
+                }
+            }
+        }
+        table_name = f"{form_id}"
+        schemas[table_name] = schema
+        module_schema = singer.resolve_schema_references(schemas, refs)
+        LOGGER.info(" ^^^^^^^^^^%s",module_schema)
+        
+        mdata = metadata.new()
+        mdata = metadata.get_standard_metadata(
+            schema=schema,
+            key_properties=["id"],
+            valid_replication_keys=["created_at"],
+            replication_method="INCREMENTAL"
+        )
+        
+        mdata = metadata.to_map(mdata)
+        mdata = metadata.write(
+            mdata, ('properties', "created_at"), 'inclusion', 'automatic')
+
+        field_metadata[table_name] = metadata.to_list(mdata)
+
+    return schemas, field_metadata
