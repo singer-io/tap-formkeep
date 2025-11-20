@@ -176,7 +176,6 @@ def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
         table_name = f"{form_id}"
         schemas[table_name] = schema
         module_schema = singer.resolve_schema_references(schemas, refs)
-        LOGGER.info(" ^^^^^^^^^^%s",module_schema)
         
         mdata = metadata.new()
         mdata = metadata.get_standard_metadata(
