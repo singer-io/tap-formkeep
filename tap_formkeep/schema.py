@@ -124,13 +124,10 @@ def infer_type(value):
 def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
     schemas = {}
     field_metadata = {}
-    refs = load_schema_references()
 
     form_ids = config.get("form_ids", [])
 
     for form_id in form_ids:
-        LOGGER.info(f"Fetching schema for FormKeep form")
-
         response = client.make_request(
             method="GET",
             endpoint=client.base_url.format(form_id=form_id),
@@ -146,21 +143,17 @@ def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
             LOGGER.warning(f"No submissions found for form {form_id}. Skipping.")
             continue
 
-        # ========== BUILD DYNAMIC DATA SCHEMA ==========
+        first_submission = submissions[0]
+        data_obj = first_submission.get("data", {})
+
         data_properties = {}
+        for key, value in data_obj.items():
+            inferred = infer_type(value)
+            if isinstance(inferred, dict):
+                data_properties[key] = inferred
+            else:
+                data_properties[key] = {"type": inferred}
 
-        for submission in submissions:
-            data_obj = submission.get("data", {})
-            for key, value in data_obj.items():
-                if key not in data_properties:
-                    inferred = infer_type(value)
-
-                    if isinstance(inferred, dict):
-                        data_properties[key] = inferred
-                    else:
-                        data_properties[key] = {"type": inferred}
-
-        # ========== BUILD FINAL SINGER SCHEMA ==========
         schema = {
             "type": "object",
             "properties": {
@@ -173,10 +166,8 @@ def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
                 }
             }
         }
-        table_name = f"{form_id}"
+        table_name = form_id
         schemas[table_name] = schema
-        module_schema = singer.resolve_schema_references(schemas, refs)
-        
         mdata = metadata.new()
         mdata = metadata.get_standard_metadata(
             schema=schema,
@@ -184,10 +175,11 @@ def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
             valid_replication_keys=["created_at"],
             replication_method="INCREMENTAL"
         )
-        
+
         mdata = metadata.to_map(mdata)
         mdata = metadata.write(
-            mdata, ('properties', "created_at"), 'inclusion', 'automatic')
+            mdata, ('properties', "created_at"), 'inclusion', 'automatic'
+        )
 
         field_metadata[table_name] = metadata.to_list(mdata)
 
