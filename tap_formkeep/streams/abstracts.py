@@ -43,7 +43,7 @@ class BaseStream(ABC):
         self.schema = catalog.schema.to_dict()
         self.metadata = metadata.to_map(catalog.metadata)
         self.child_to_sync = []
-        self.params = {'page': 1, 'page_limit': 25, 'spam': 'false'}
+        self.params = {'page': 1, 'page_limit': self.page_size, 'spam': 'false'}
         self.data_payload = {}
 
     @property
