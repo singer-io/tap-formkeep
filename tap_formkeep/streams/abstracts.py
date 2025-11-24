@@ -43,7 +43,7 @@ class BaseStream(ABC):
         self.schema = catalog.schema.to_dict()
         self.metadata = metadata.to_map(catalog.metadata)
         self.child_to_sync = []
-        self.params = {'api_token': 'api_token', 'page': 1, 'page_limit': 25, 'spam': 'False', 'startdate': ''}
+        self.params = {'page': 1, 'page_limit': 25, 'spam': 'false'}
         self.data_payload = {}
 
     @property
@@ -99,21 +99,35 @@ class BaseStream(ABC):
 
     def get_records(self) -> Iterator:
         """Interacts with api client interaction and pagination."""
-        self.params[""] = self.page_size
-        next_page = 1
-        while next_page:
+        self.params["page"] = 1
+        response = self.client.make_request(
+            self.http_method,
+            self.url_endpoint,
+            self.params,
+            body=json.dumps(self.data_payload),
+            path=self.path
+        )
+
+        raw_records = response.get(self.data_key, [])
+        total = response.get("total") or 0
+        page_limit = self.params.get("page_limit", 25)
+
+        for record in raw_records:
+            yield record
+
+        total_pages = (total + page_limit - 1) // page_limit
+
+        for page in range(2, total_pages + 1):
+            self.params["page"] = page
+
             response = self.client.make_request(
                 self.http_method,
                 self.url_endpoint,
                 self.params,
-                self.headers,
                 body=json.dumps(self.data_payload),
                 path=self.path
             )
             raw_records = response.get(self.data_key, [])
-            next_page = response.get(self.next_page_key)
-
-            self.params[self.next_page_key] = next_page
             yield from raw_records
 
     def write_schema(self) -> None:
@@ -132,6 +146,13 @@ class BaseStream(ABC):
         """
         Update params for the stream
         """
+        default = {
+            "page": 1,
+            "page_limit": self.page_size,
+            "spam": "false"
+        }
+
+        self.params = {**default, **self.params}
         self.params.update(kwargs)
 
     def update_data_payload(self, **kwargs) -> None:
@@ -150,7 +171,7 @@ class BaseStream(ABC):
         """
         Get the URL endpoint for the stream
         """
-        return self.url_endpoint or f"{self.client.base_url}/{self.path}"
+        return self.url_endpoint or self.client.base_url.format(form_id=self.path)
 
 
 class IncrementalStream(BaseStream):
@@ -189,8 +210,7 @@ class IncrementalStream(BaseStream):
         """Implementation for `type: Incremental` stream."""
         bookmark_date = self.get_bookmark(state, self.tap_stream_id)
         current_max_bookmark_date = bookmark_date
-        self.update_params(updated_since=bookmark_date)
-        self.update_data_payload(parent_obj=parent_obj)
+        self.update_params(startdate=bookmark_date)
         self.url_endpoint = self.get_url_endpoint(parent_obj)
 
         with metrics.record_counter(self.tap_stream_id) as counter:
@@ -299,4 +319,3 @@ class ChildBaseStream(IncrementalStream):
             self.bookmark_value = super().get_bookmark(state, stream)
 
         return self.bookmark_value
-
