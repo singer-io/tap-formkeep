@@ -5,6 +5,7 @@ from typing import Dict, Tuple
 from singer import metadata
 from tap_formkeep.streams import STREAMS
 import re
+import ast
 
 LOGGER = singer.get_logger()
 
@@ -125,7 +126,12 @@ def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
     schemas = {}
     field_metadata = {}
 
-    form_ids = config.get("form_ids", [])
+    raw_ids = config.get("form_ids", [])
+
+    if isinstance(raw_ids, str):
+        form_ids = ast.literal_eval(raw_ids)
+    else:
+        form_ids = raw_ids
 
     for form_id in form_ids:
         response = client.make_request(
@@ -133,8 +139,7 @@ def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
             endpoint=client.base_url.format(form_id=form_id),
             params={
                 "page": 1,
-                "include_attachments": "true",
-                "spam": "false"
+                "include_attachments": "true"
             }
         )
 
