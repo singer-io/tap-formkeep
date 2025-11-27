@@ -21,4 +21,3 @@ class formkeepStartDateTest(StartDateTest, formkeepBaseTest):
     @property
     def start_date_2(self):
         return "2017-01-25T00:00:00Z"
-
