@@ -17,5 +17,5 @@ class formkeepPaginationTest(PaginationTest, formkeepBaseTest):
     def test_record_count_greater_than_page_limit(self):  # type: ignore[override]
         self.skipTest(
             "Skipping strict >100 record assertion; formkeep env has fewer records "
-            "but still paginates correctly with page_size=1."
+            "but still paginates correctly with page=25."
         )
