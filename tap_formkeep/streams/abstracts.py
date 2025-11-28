@@ -28,7 +28,7 @@ class BaseStream(ABC):
 
     url_endpoint = ""
     path = ""
-    page_size = 25
+    page = 25
     next_page_key = "next_page"
     headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
     children = []
@@ -43,6 +43,7 @@ class BaseStream(ABC):
         self.schema = catalog.schema.to_dict()
         self.metadata = metadata.to_map(catalog.metadata)
         self.child_to_sync = []
+        self.page_size = self.client.config.get("page_size", self.page)
         self.params = {'page': 1, 'page_limit': self.page_size}
         self.data_payload = {}
 
@@ -109,14 +110,11 @@ class BaseStream(ABC):
         )
 
         raw_records = response.get(self.data_key, [])
-        total = response.get("total") or 0
-        page_limit = self.params.get("page_limit", 25)
+        pagination = response.get("meta", {}).get("pagination", {})
+        total_pages = pagination.get("total_pages", 1)
 
         for record in raw_records:
             yield record
-
-        total_pages = (total + page_limit - 1) // page_limit
-
         for page in range(2, total_pages + 1):
             self.params["page"] = page
 
