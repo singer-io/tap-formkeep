@@ -14,6 +14,8 @@ from singer import (
 
 LOGGER = get_logger()
 
+DEFAULT_PAGE_SIZE = 25
+
 
 class BaseStream(ABC):
     """
@@ -28,7 +30,6 @@ class BaseStream(ABC):
 
     url_endpoint = ""
     path = ""
-    page = 25
     next_page_key = "next_page"
     headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
     children = []
@@ -43,7 +44,7 @@ class BaseStream(ABC):
         self.schema = catalog.schema.to_dict()
         self.metadata = metadata.to_map(catalog.metadata)
         self.child_to_sync = []
-        self.page_size = self.client.config.get("page_size", self.page)
+        self.page_size = self.client.config.get("page_size", DEFAULT_PAGE_SIZE)
         self.params = {'page': 1, 'page_limit': self.page_size}
         self.data_payload = {}
 
