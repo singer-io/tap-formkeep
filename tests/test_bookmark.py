@@ -8,7 +8,8 @@ class formkeepBookMarkTest(BookmarkTest, formkeepBaseTest):
     bookmark_format = "%Y-%m-%dT%H:%M:%S.%fZ"
     initial_bookmarks = {
         "bookmarks": {
-            "submissions": { "created_at" : "2020-01-01T00:00:00Z"},
+            "5e5ee5b14b02": { "created_at" : "2025-11-17T00:00:00Z"},
+            "a934600be226": { "created_at" : "2025-11-17T00:00:00Z"},
         }
     }
     @staticmethod
@@ -19,3 +20,13 @@ class formkeepBookMarkTest(BookmarkTest, formkeepBaseTest):
         streams_to_exclude = {}
         return self.expected_stream_names().difference(streams_to_exclude)
 
+    def calculate_new_bookmarks(self):
+        """Calculates new bookmarks by looking through sync 1 data to determine
+        a bookmark that will sync 2 records in sync 2 (plus any necessary look
+        back data)"""
+        new_bookmarks = {
+            "5e5ee5b14b02": { "created_at" : "2025-11-24T00:00:00Z"},
+            "a934600be226": { "created_at" : "2025-11-24T00:00:00Z"},
+        }
+
+        return new_bookmarks

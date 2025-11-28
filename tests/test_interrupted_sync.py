@@ -17,9 +17,9 @@ class formkeepInterruptedSyncTest(InterruptedSyncTest, formkeepBaseTest):
 
     def manipulate_state(self):
         return {
-            "currently_syncing": "prospects",
+            "currently_syncing": "5e5ee5b14b02",
             "bookmarks": {
-                "submissions": { "created_at" : "2020-01-01T00:00:00Z"},
+                "5e5ee5b14b02": { "created_at" : "2020-01-01T00:00:00Z"},
+                "a934600be226": { "created_at" : "2020-01-01T00:00:00Z"},
         }
     }
-
