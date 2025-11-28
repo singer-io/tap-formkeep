@@ -88,41 +88,55 @@ DATETIME_REGEX = re.compile(
 
 def infer_type(value):
     if value is None:
-        return ["null", "string"]
+        return {"type": ["null", "string"]}
 
     if isinstance(value, bool):
-        return ["null", "boolean"]
+        return {"type": ["null", "boolean"]}
 
     if isinstance(value, int):
-        return ["null", "integer"]
+        return {"type": ["null", "integer"]}
 
     if isinstance(value, float):
-        return ["null", "number"]
-
-    if isinstance(value, list):
-        return ["null", "array"]
-
-    if isinstance(value, dict):
-        return ["null", "object"]
+        return {"type": ["null", "number"]}
 
     if isinstance(value, str):
-        # Only datetime gets format
-        if DATETIME_REGEX.match(value):
+        if DATETIME_REGEX.match(value) or DATE_REGEX.match(value):
             return {"type": ["null", "string"], "format": "date-time"}
 
-        # Date-only (YYYY-MM-DD) → treat as plain string
-        if DATE_REGEX.match(value):
-            return ["null", "string"]
-
-        # Time-only → plain string
         if TIME_REGEX.match(value):
-            return ["null", "string"]
+            return {"type": ["null", "string"]}
 
-        return ["null", "string"]
+        return {"type": ["null", "string"]}
 
-    return ["null", "string"]
+    # --- Recursive dict ---
+    if isinstance(value, dict):
+        props = {
+            k: infer_type(v)
+            for k, v in value.items()
+        }
+        return {
+            "type": ["null", "object"],
+            "properties": props
+        }
 
-def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
+    # --- Recursive list ---
+    if isinstance(value, list):
+        if value:
+            # infer type from first element
+            item_type = infer_type(value[0])
+        else:
+            # empty list → unknown items
+            item_type = {"type": ["null", "string"]}
+
+        return {
+            "type": ["null", "array"],
+            "items": item_type
+        }
+
+    return {"type": ["null", "string"]}
+
+
+def get_dynamic_schema(client, config):
     schemas = {}
     field_metadata = {}
 
@@ -137,27 +151,17 @@ def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
         response = client.make_request(
             method="GET",
             endpoint=client.base_url.format(form_id=form_id),
-            params={
-                "page": 1,
-                "include_attachments": "true"
-            }
+            params={"page": 1, "include_attachments": "true"},
         )
 
         submissions = response.get("submissions", [])
         if not submissions:
-            LOGGER.warning(f"No submissions found for form {form_id}. Skipping.")
             continue
 
         first_submission = submissions[0]
         data_obj = first_submission.get("data", {})
 
-        data_properties = {}
-        for key, value in data_obj.items():
-            inferred = infer_type(value)
-            if isinstance(inferred, dict):
-                data_properties[key] = inferred
-            else:
-                data_properties[key] = {"type": inferred}
+        data_properties = {k: infer_type(v) for k, v in data_obj.items()}
 
         schema = {
             "type": "object",
@@ -167,25 +171,25 @@ def get_dynamic_schema(client, config) -> Tuple[Dict, Dict]:
                 "spam": {"type": ["null", "boolean"]},
                 "data": {
                     "type": "object",
-                    "properties": data_properties
-                }
-            }
+                    "properties": data_properties,
+                },
+            },
         }
-        table_name = form_id
-        schemas[table_name] = schema
+
+        schemas[form_id] = schema
+
+        # metadata
         mdata = metadata.new()
         mdata = metadata.get_standard_metadata(
             schema=schema,
             key_properties=["id"],
             valid_replication_keys=["created_at"],
-            replication_method="INCREMENTAL"
+            replication_method="INCREMENTAL",
         )
-
         mdata = metadata.to_map(mdata)
         mdata = metadata.write(
             mdata, ('properties', "created_at"), 'inclusion', 'automatic'
         )
-
-        field_metadata[table_name] = metadata.to_list(mdata)
+        field_metadata[form_id] = metadata.to_list(mdata)
 
     return schemas, field_metadata
