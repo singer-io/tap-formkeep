@@ -2,7 +2,6 @@
 from base import formkeepBaseTest
 from tap_tester.base_suite_tests.discovery_test import DiscoveryTest
 from tap_tester import menagerie
-import re
 
 
 class formkeepDiscoveryTest(DiscoveryTest, formkeepBaseTest):
