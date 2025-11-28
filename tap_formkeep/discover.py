@@ -8,7 +8,7 @@ LOGGER = singer.get_logger()
 
 def discover(client, config) -> Catalog:
     """
-    Dynamically discover all form from formkeep and build the catalog.
+    Dynamically discover all forms from formkeep and build the catalog.
     """
     dynamic_schemas, dynamic_field_metadata = get_dynamic_schema(client, config)
     catalog = Catalog([])
