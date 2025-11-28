@@ -10,7 +10,7 @@ from tap_formkeep.exceptions import ERROR_CODE_EXCEPTION_MAPPING, formkeepError,
 
 LOGGER = get_logger()
 REQUEST_TIMEOUT = 300
-DEFAULT_USER_AGENT = 'Singer.io Bing Ads Tap'
+DEFAULT_USER_AGENT = 'Singer.io formkeep Tap'
 
 def raise_for_error(response: requests.Response) -> None:
     """Raises the associated response exception. Takes in a response object,
