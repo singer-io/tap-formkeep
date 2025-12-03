@@ -135,6 +135,11 @@ def infer_type(value):
 
     return {"type": ["null", "string"]}
 
+def sanitize_field_name(field_name: str) -> str:
+    """
+    Replace spaces with underscores and optionally remove other problematic characters.
+    """
+    return field_name.replace(" ", "_")
 
 def get_dynamic_schema(client, config):
     schemas = {}
@@ -161,7 +166,11 @@ def get_dynamic_schema(client, config):
         first_submission = submissions[0]
         data_obj = first_submission.get("data", {})
 
-        data_properties = {k: infer_type(v) for k, v in data_obj.items()}
+        # Sanitize field names
+        data_properties = {
+            sanitize_field_name(k): infer_type(v)
+            for k, v in data_obj.items()
+        }
 
         schema = {
             "type": "object",

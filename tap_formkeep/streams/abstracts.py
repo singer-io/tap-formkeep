@@ -17,6 +17,23 @@ LOGGER = get_logger()
 DEFAULT_PAGE_SIZE = 25
 
 
+def sanitize_record_keys(obj: Any) -> Any:
+    """
+    Recursively replace spaces in dictionary keys with underscores.
+    Works for nested dictionaries and lists of dictionaries.
+    """
+    if isinstance(obj, dict):
+        new_obj = {}
+        for k, v in obj.items():
+            new_key = k.replace(" ", "_")
+            new_obj[new_key] = sanitize_record_keys(v)
+        return new_obj
+    elif isinstance(obj, list):
+        return [sanitize_record_keys(item) for item in obj]
+    else:
+        return obj
+
+
 class BaseStream(ABC):
     """
     A Base Class providing structure and boilerplate for generic streams
@@ -163,7 +180,8 @@ class BaseStream(ABC):
         """
         Modify the record before writing to the stream
         """
-        return record
+        sanitized_record = sanitize_record_keys(record)
+        return sanitized_record
 
     def get_url_endpoint(self, parent_obj: Dict = None) -> str:
         """
