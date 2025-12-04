@@ -54,7 +54,7 @@ class TestGetDynamicSchema(unittest.TestCase):
     def test_get_dynamic_schema_basic(self):
         schemas, field_metadata = get_dynamic_schema(
             self.client,
-            {"form_ids": ["test_form"]}
+            {"form_ids": "test_form"}
         )
 
         # schema created?
@@ -78,7 +78,7 @@ class TestGetDynamicSchema(unittest.TestCase):
     def test_recursive_fields(self):
         schemas, _ = get_dynamic_schema(
             self.client,
-            {"form_ids": ["test_form"]}
+            {"form_ids": "test_form"}
         )
 
         schema = schemas["test_form"]
@@ -125,7 +125,7 @@ class TestGetDynamicSchema(unittest.TestCase):
     def test_metadata_generated(self):
         _, field_metadata = get_dynamic_schema(
             self.client,
-            {"form_ids": ["test_form"]}
+            {"form_ids": "test_form"}
         )
 
         self.assertIn("test_form", field_metadata)

@@ -3,6 +3,9 @@ from unittest.mock import patch, MagicMock
 from tap_formkeep.streams.abstracts import IncrementalStream
 
 class ConcreteParentBaseStream(IncrementalStream):
+    def __init__(self, client=None, catalog=None):
+        super().__init__(client, catalog)
+
     @property
     def key_properties(self):
         return ["id"]
@@ -28,8 +31,14 @@ class TestSync(unittest.TestCase):
         mock_catalog.metadata = "mock_metadata"
         mock_to_map.return_value = {"metadata_key": "metadata_value"}
 
-        self.stream = ConcreteParentBaseStream(catalog=mock_catalog)
-        self.stream.client = MagicMock()
+        client = MagicMock()
+        client.config = {
+            "start_date": "2020-01-01T00:00:00Z",
+            "page_size": 10
+        }
+
+        self.stream = ConcreteParentBaseStream(catalog=mock_catalog, client=client)
+        self.stream.client = client
         self.stream.child_to_sync = []
 
     @patch("tap_formkeep.streams.abstracts.get_bookmark", return_value=100)

@@ -144,7 +144,8 @@ def get_dynamic_schema(client, config):
     schemas = {}
     field_metadata = {}
 
-    raw_ids = config.get("form_ids", [])
+    raw_ids = config.get("form_ids", "")
+    raw_ids = [id.strip() for id in raw_ids.split(",")]
 
     if isinstance(raw_ids, str):
         form_ids = ast.literal_eval(raw_ids)

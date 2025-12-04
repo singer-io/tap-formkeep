@@ -1,5 +1,5 @@
 {
     "api_token": "api_token",
-    "forms_id": ["ids"],
+    "form_ids": "id1, id2, id3",
     "start_date": "2019-01-01T00:00:00Z"
 }

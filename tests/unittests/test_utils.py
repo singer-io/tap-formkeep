@@ -35,7 +35,9 @@ class TestUtils(unittest.TestCase):
             "Key/With/Slash": "value8",
             "Again-/ Some Nesting": {
                 "Special!@#Chars": "value9"
-            }
+            },
+            "mix-casing-key": "value10",
+            "Mix-casing-key": "value11",
         }
     }
 
@@ -53,7 +55,9 @@ class TestUtils(unittest.TestCase):
             "Key_With_Slash": "value8",
             "Again_Some_Nesting": {
                 "Special_Chars": "value9"
-            }
+            },
+            "mix_casing_key": "value10",
+            "Mix_casing_key": "value11",
         }
     }
 
