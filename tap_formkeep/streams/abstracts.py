@@ -1,37 +1,15 @@
-from abc import ABC, abstractmethod
 import json
-from typing import Any, Dict, Tuple, List, Iterator
-from singer import (
-    Transformer,
-    get_bookmark,
-    get_logger,
-    metrics,
-    write_bookmark,
-    write_record,
-    write_schema,
-    metadata
-)
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Iterator, List, Tuple
+
+from singer import (Transformer, get_bookmark, get_logger, metadata, metrics,
+                    write_bookmark, write_record, write_schema)
+
+from tap_formkeep.utils import sanitize_record_keys
 
 LOGGER = get_logger()
 
 DEFAULT_PAGE_SIZE = 25
-
-
-def sanitize_record_keys(obj: Any) -> Any:
-    """
-    Recursively replace spaces in dictionary keys with underscores.
-    Works for nested dictionaries and lists of dictionaries.
-    """
-    if isinstance(obj, dict):
-        new_obj = {}
-        for k, v in obj.items():
-            new_key = k.replace(" ", "_")
-            new_obj[new_key] = sanitize_record_keys(v)
-        return new_obj
-    elif isinstance(obj, list):
-        return [sanitize_record_keys(item) for item in obj]
-    else:
-        return obj
 
 
 class BaseStream(ABC):
@@ -115,7 +93,6 @@ class BaseStream(ABC):
          - https://github.com/singer-io/getting-started/blob/master/docs/SYNC_MODE.md
         """
 
-
     def get_records(self) -> Iterator:
         """Interacts with api client interaction and pagination."""
         self.params["page"] = 1
@@ -193,7 +170,6 @@ class BaseStream(ABC):
 class IncrementalStream(BaseStream):
     """Base Class for Incremental Stream."""
 
-
     def get_bookmark(self, state: dict, stream: str, key: Any = None) -> int:
         """A wrapper for singer.get_bookmark to deal with compatibility for
         bookmark values or start values."""
@@ -215,7 +191,6 @@ class IncrementalStream(BaseStream):
         return write_bookmark(
             state, stream, key or self.replication_keys[0], value
         )
-
 
     def sync(
         self,

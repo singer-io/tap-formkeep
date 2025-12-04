@@ -1,13 +1,22 @@
-import os
-import json
-import singer
-from typing import Dict, Tuple
-from singer import metadata
-from tap_formkeep.streams import STREAMS
-import re
 import ast
+import json
+import os
+import re
+from typing import Dict, Tuple
+
+import singer
+from singer import metadata
+
+from tap_formkeep.streams import STREAMS
+from tap_formkeep.utils import sanitize_field_name
 
 LOGGER = singer.get_logger()
+
+DATE_REGEX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+TIME_REGEX = re.compile(r"^\d{2}:\d{2}(:\d{2})?$")
+DATETIME_REGEX = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(Z|[\+\-]\d{2}:\d{2}| UTC)?$"
+)
 
 
 def get_abs_path(path: str) -> str:
@@ -80,11 +89,6 @@ def get_schemas() -> Tuple[Dict, Dict]:
 
     return schemas, field_metadata
 
-DATE_REGEX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-TIME_REGEX = re.compile(r"^\d{2}:\d{2}(:\d{2})?$")
-DATETIME_REGEX = re.compile(
-    r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(Z|[\+\-]\d{2}:\d{2}| UTC)?$"
-)
 
 def infer_type(value):
     if value is None:
@@ -135,11 +139,6 @@ def infer_type(value):
 
     return {"type": ["null", "string"]}
 
-def sanitize_field_name(field_name: str) -> str:
-    """
-    Replace spaces with underscores and optionally remove other problematic characters.
-    """
-    return field_name.replace(" ", "_")
 
 def get_dynamic_schema(client, config):
     schemas = {}
