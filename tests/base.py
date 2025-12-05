@@ -54,7 +54,7 @@ class formkeepBaseTest(BaseCase):
     def get_credentials():
         """Authentication information for the test account."""
         credentials_dict = {}
-        creds = {'api_token': 'API_TOKEN', 'form_ids': 'FORM_ID'}
+        creds = {'api_token': 'TAP_FORMKEEP_API_TOKEN', 'form_ids': 'TAP_FORMKEEP_FORM_IDS'}
 
         for cred in creds:
             credentials_dict[cred] = os.getenv(creds[cred])
