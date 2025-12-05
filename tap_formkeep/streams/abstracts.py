@@ -1,18 +1,15 @@
-from abc import ABC, abstractmethod
 import json
-from typing import Any, Dict, Tuple, List, Iterator
-from singer import (
-    Transformer,
-    get_bookmark,
-    get_logger,
-    metrics,
-    write_bookmark,
-    write_record,
-    write_schema,
-    metadata
-)
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Iterator, List, Tuple
+
+from singer import (Transformer, get_bookmark, get_logger, metadata, metrics,
+                    write_bookmark, write_record, write_schema)
+
+from tap_formkeep.utils import sanitize_record_keys
 
 LOGGER = get_logger()
+
+DEFAULT_PAGE_SIZE = 25
 
 
 class BaseStream(ABC):
@@ -28,7 +25,6 @@ class BaseStream(ABC):
 
     url_endpoint = ""
     path = ""
-    page_size = 25
     next_page_key = "next_page"
     headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
     children = []
@@ -43,7 +39,8 @@ class BaseStream(ABC):
         self.schema = catalog.schema.to_dict()
         self.metadata = metadata.to_map(catalog.metadata)
         self.child_to_sync = []
-        self.params = {'api_token': 'api_token', 'page': 1, 'page_limit': 25, 'spam': 'False', 'startdate': ''}
+        self.page_size = self.client.config.get("page_size", DEFAULT_PAGE_SIZE)
+        self.params = {'page': 1, 'page_limit': self.page_size}
         self.data_payload = {}
 
     @property
@@ -96,24 +93,34 @@ class BaseStream(ABC):
          - https://github.com/singer-io/getting-started/blob/master/docs/SYNC_MODE.md
         """
 
-
     def get_records(self) -> Iterator:
         """Interacts with api client interaction and pagination."""
-        self.params[""] = self.page_size
-        next_page = 1
-        while next_page:
+        self.params["page"] = 1
+        response = self.client.make_request(
+            self.http_method,
+            self.url_endpoint,
+            self.params,
+            body=json.dumps(self.data_payload),
+            path=self.path
+        )
+
+        raw_records = response.get(self.data_key, [])
+        pagination = response.get("meta", {}).get("pagination", {})
+        total_pages = pagination.get("total_pages", 1)
+
+        for record in raw_records:
+            yield record
+        for page in range(2, total_pages + 1):
+            self.params["page"] = page
+
             response = self.client.make_request(
                 self.http_method,
                 self.url_endpoint,
                 self.params,
-                self.headers,
                 body=json.dumps(self.data_payload),
                 path=self.path
             )
             raw_records = response.get(self.data_key, [])
-            next_page = response.get(self.next_page_key)
-
-            self.params[self.next_page_key] = next_page
             yield from raw_records
 
     def write_schema(self) -> None:
@@ -132,6 +139,12 @@ class BaseStream(ABC):
         """
         Update params for the stream
         """
+        default = {
+            "page": 1,
+            "page_limit": self.page_size
+        }
+
+        self.params = {**default, **self.params}
         self.params.update(kwargs)
 
     def update_data_payload(self, **kwargs) -> None:
@@ -144,18 +157,18 @@ class BaseStream(ABC):
         """
         Modify the record before writing to the stream
         """
-        return record
+        sanitized_record = sanitize_record_keys(record)
+        return sanitized_record
 
     def get_url_endpoint(self, parent_obj: Dict = None) -> str:
         """
         Get the URL endpoint for the stream
         """
-        return self.url_endpoint or f"{self.client.base_url}/{self.path}"
+        return self.url_endpoint or self.client.base_url.format(form_id=self.path)
 
 
 class IncrementalStream(BaseStream):
     """Base Class for Incremental Stream."""
-
 
     def get_bookmark(self, state: dict, stream: str, key: Any = None) -> int:
         """A wrapper for singer.get_bookmark to deal with compatibility for
@@ -179,7 +192,6 @@ class IncrementalStream(BaseStream):
             state, stream, key or self.replication_keys[0], value
         )
 
-
     def sync(
         self,
         state: Dict,
@@ -189,8 +201,7 @@ class IncrementalStream(BaseStream):
         """Implementation for `type: Incremental` stream."""
         bookmark_date = self.get_bookmark(state, self.tap_stream_id)
         current_max_bookmark_date = bookmark_date
-        self.update_params(updated_since=bookmark_date)
-        self.update_data_payload(parent_obj=parent_obj)
+        self.update_params(startdate=bookmark_date)
         self.url_endpoint = self.get_url_endpoint(parent_obj)
 
         with metrics.record_counter(self.tap_stream_id) as counter:
@@ -295,8 +306,8 @@ class ChildBaseStream(IncrementalStream):
 
     def get_bookmark(self, state: Dict, stream: str, key: Any = None) -> int:
         """Singleton bookmark value for child streams."""
-        if not self.bookmark_value:
+        # This is getting dynamically set parent class
+        if not self.bookmark_value:  # pylint: disable=access-member-before-definition
             self.bookmark_value = super().get_bookmark(state, stream)
 
         return self.bookmark_value
-

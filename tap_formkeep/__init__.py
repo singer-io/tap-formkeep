@@ -7,14 +7,14 @@ from tap_formkeep.sync import sync
 
 LOGGER = singer.get_logger()
 
-REQUIRED_CONFIG_KEYS = ['api_token', 'form_id', 'start_date']
+REQUIRED_CONFIG_KEYS = ['api_token', 'form_ids', 'start_date']
 
-def do_discover():
+def do_discover(client, config):
     """
     Discover and emit the catalog to stdout
     """
     LOGGER.info("Starting discover")
-    catalog = discover()
+    catalog = discover(client, config)
     json.dump(catalog.to_dict(), sys.stdout, indent=2)
     LOGGER.info("Finished discover")
 
@@ -31,7 +31,7 @@ def main():
 
     with Client(parsed_args.config) as client:
         if parsed_args.discover:
-            do_discover()
+            do_discover(client, parsed_args.config)
         elif parsed_args.catalog:
             sync(
                 client=client,

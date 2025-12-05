@@ -1,11 +1,22 @@
-import os
+import ast
 import json
-import singer
+import os
+import re
 from typing import Dict, Tuple
+
+import singer
 from singer import metadata
+
 from tap_formkeep.streams import STREAMS
+from tap_formkeep.utils import sanitize_field_name
 
 LOGGER = singer.get_logger()
+
+DATE_REGEX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+TIME_REGEX = re.compile(r"^\d{2}:\d{2}(:\d{2})?$")
+DATETIME_REGEX = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(Z|[\+\-]\d{2}:\d{2}| UTC)?$"
+)
 
 
 def get_abs_path(path: str) -> str:
@@ -78,3 +89,116 @@ def get_schemas() -> Tuple[Dict, Dict]:
 
     return schemas, field_metadata
 
+
+def infer_type(value):
+    if value is None:
+        return {"type": ["null", "string"]}
+
+    if isinstance(value, bool):
+        return {"type": ["null", "boolean"]}
+
+    if isinstance(value, int):
+        return {"type": ["null", "integer"]}
+
+    if isinstance(value, float):
+        return {"type": ["null", "number"]}
+
+    if isinstance(value, str):
+        if DATETIME_REGEX.match(value) or DATE_REGEX.match(value):
+            return {"type": ["null", "string"], "format": "date-time"}
+
+        if TIME_REGEX.match(value):
+            return {"type": ["null", "string"]}
+
+        return {"type": ["null", "string"]}
+
+    # --- Recursive dict ---
+    if isinstance(value, dict):
+        props = {
+            k: infer_type(v)
+            for k, v in value.items()
+        }
+        return {
+            "type": ["null", "object"],
+            "properties": props
+        }
+
+    # --- Recursive list ---
+    if isinstance(value, list):
+        if value:
+            # infer type from first element
+            item_type = infer_type(value[0])
+        else:
+            # empty list → unknown items
+            item_type = {"type": ["null", "string"]}
+
+        return {
+            "type": ["null", "array"],
+            "items": item_type
+        }
+
+    return {"type": ["null", "string"]}
+
+
+def get_dynamic_schema(client, config):
+    schemas = {}
+    field_metadata = {}
+
+    raw_ids = config.get("form_ids", "")
+    raw_ids = [id.strip() for id in raw_ids.split(",")]
+
+    if isinstance(raw_ids, str):
+        form_ids = ast.literal_eval(raw_ids)
+    else:
+        form_ids = raw_ids
+
+    for form_id in form_ids:
+        response = client.make_request(
+            method="GET",
+            endpoint=client.base_url.format(form_id=form_id),
+            params={"page": 1, "include_attachments": "true"},
+        )
+
+        submissions = response.get("submissions", [])
+        if not submissions:
+            continue
+
+        first_submission = submissions[0]
+        data_obj = first_submission.get("data", {})
+
+        # Sanitize field names
+        data_properties = {
+            sanitize_field_name(k): infer_type(v)
+            for k, v in data_obj.items()
+        }
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "id": {"type": ["null", "integer"]},
+                "created_at": {"type": ["null", "string"], "format": "date-time"},
+                "spam": {"type": ["null", "boolean"]},
+                "data": {
+                    "type": "object",
+                    "properties": data_properties,
+                },
+            },
+        }
+
+        schemas[form_id] = schema
+
+        # metadata
+        mdata = metadata.new()
+        mdata = metadata.get_standard_metadata(
+            schema=schema,
+            key_properties=["id"],
+            valid_replication_keys=["created_at"],
+            replication_method="INCREMENTAL",
+        )
+        mdata = metadata.to_map(mdata)
+        mdata = metadata.write(
+            mdata, ('properties', "created_at"), 'inclusion', 'automatic'
+        )
+        field_metadata[form_id] = metadata.to_list(mdata)
+
+    return schemas, field_metadata

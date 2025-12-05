@@ -10,6 +10,7 @@ from tap_formkeep.exceptions import ERROR_CODE_EXCEPTION_MAPPING, formkeepError,
 
 LOGGER = get_logger()
 REQUEST_TIMEOUT = 300
+DEFAULT_USER_AGENT = 'Singer.io FormKeep Tap'
 
 def raise_for_error(response: requests.Response) -> None:
     """Raises the associated response exception. Takes in a response object,
@@ -64,7 +65,10 @@ class Client:
 
     def authenticate(self, headers: Dict, params: Dict) -> Tuple[Dict, Dict]:
         """Authenticates the request with the token"""
-        headers["Authorization"] = self.config["api_token"]
+        # Make a shallow copy to avoid mutating the caller's dictionary
+        headers = dict(headers) if headers is not None else {}
+        headers["Authorization"] = f"Token {self.config['api_token']}"
+        headers["User-Agent"] = self.config.get("user_agent", DEFAULT_USER_AGENT)
         return headers, params
 
     def make_request(
