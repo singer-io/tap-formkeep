@@ -11,11 +11,11 @@ setup(name="tap-formkeep",
       classifiers=["Programming Language :: Python :: 3 :: Only"],
       py_modules=["tap_formkeep"],
       install_requires=[
-        "singer-python==6.1.1",
-        "requests==2.32.4",
-        "backoff==2.2.1",
-        "parameterized"
+        "singer-python==6.3.0",
+        "requests==2.32.5",
+        "backoff==2.2.1"
       ],
+      extras_require={'dev': ['pylint', 'parameterized', 'pytest', 'ipdb']},
       entry_points="""
           [console_scripts]
           tap-formkeep=tap_formkeep:main
