@@ -1,0 +1,50 @@
+{
+    "tap_name": "formkeep",
+    "required_config_keys": [
+        "api_token",
+        "form_id",
+        "start_date"
+    ],
+    "page_size": 25,
+    "next_page_key": "next_page",
+    "pagination_key": null,
+    "data_key": null,
+    "headers": {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    },
+    "params": {
+            "api_token": "api_token",
+            "page": 1,
+            "page_limit": 25,
+            "spam": "False",
+            "startdate": ""
+        },
+    "auth_header_key": "Authorization",
+    "auth_config_key": "api_token",
+    "base_url": "https://formkeep.com/api/v1/forms/{form_id}/submissions.json",
+    "streams": [
+        {
+            "name": "submissions",
+            "key_properties": [
+                "id"
+            ],
+            "replication_method": "INCREMENTAL",
+            "replication_keys": [
+                "created_at"
+            ],
+            "doc_link": "https://support.formkeep.com/docs/do-you-have-any-api-documentation/"
+        }
+    ],
+    "tap_tester_creds": {
+        "api_token": "API_TOKEN",
+        "space_id": "FORM_ID",
+        "start_date": "start_date"
+    },
+    "author": "Stitch",
+    "third_party_dependencies": [
+        "singer-python==6.1.1",
+        "requests==2.32.4",
+        "backoff==2.2.1"
+    ]
+}
