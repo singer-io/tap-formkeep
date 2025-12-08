@@ -15,7 +15,7 @@ setup(name="tap-formkeep",
         "requests==2.32.5",
         "backoff==2.2.1"
       ],
-      extras_require={'dev': ['pylint', 'parameterized', 'pytest', 'ipdb']},
+      extras_require={'dev': ['pylint', 'parameterized']},
       entry_points="""
           [console_scripts]
           tap-formkeep=tap_formkeep:main
