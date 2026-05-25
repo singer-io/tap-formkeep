@@ -7,6 +7,7 @@ from typing import Dict, Tuple
 import singer
 from singer import metadata
 
+from tap_formkeep.exceptions import formkeepUnprocessableEntityError
 from tap_formkeep.streams import STREAMS
 from tap_formkeep.utils import sanitize_field_name
 
@@ -161,7 +162,9 @@ def get_dynamic_schema(client, config):
 
         submissions = response.get("submissions", [])
         if not submissions:
-            continue
+            error_message = "No submissions found or data must have been expired for form_id: {}. Please re-check configuration".format(form_id)
+            LOGGER.error(error_message)
+            raise formkeepUnprocessableEntityError(error_message)
 
         first_submission = submissions[0]
         data_obj = first_submission.get("data", {})

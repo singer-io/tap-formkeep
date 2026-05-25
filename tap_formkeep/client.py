@@ -6,11 +6,12 @@ from requests import session
 from requests.exceptions import Timeout, ConnectionError, ChunkedEncodingError
 from singer import get_logger, metrics
 
-from tap_formkeep.exceptions import ERROR_CODE_EXCEPTION_MAPPING, formkeepError, formkeepBackoffError
+from tap_formkeep.exceptions import ERROR_CODE_EXCEPTION_MAPPING, formkeepBadRequestError, formkeepError, formkeepBackoffError
 
 LOGGER = get_logger()
 REQUEST_TIMEOUT = 300
 DEFAULT_USER_AGENT = 'Singer.io FormKeep Tap'
+
 
 def raise_for_error(response: requests.Response) -> None:
     """Raises the associated response exception. Takes in a response object,
@@ -35,6 +36,7 @@ def raise_for_error(response: requests.Response) -> None:
             "raise_exception", formkeepError
         )
         raise exc(message, response) from None
+
 
 class Client:
     """
@@ -61,7 +63,23 @@ class Client:
         self._session.close()
 
     def check_api_credentials(self) -> None:
-        pass
+        LOGGER.info("Checking API credentials")
+
+        raw_ids = self.config.get("form_ids", "")
+        if not raw_ids:
+            error_message = "form_ids is required in the configuration. Please re-check configuration"
+            LOGGER.error(error_message)
+            raise formkeepBadRequestError(error_message)
+
+        raw_ids = [id.strip() for id in raw_ids.split(",")]
+        req_id = raw_ids[0]
+        self.make_request(
+            method="GET",
+            endpoint=self.base_url.format(form_id=req_id),
+            params={"page": 1, "include_attachments": "true"},
+        )
+
+        LOGGER.info("API credentials are valid")
 
     def authenticate(self, headers: Dict, params: Dict) -> Tuple[Dict, Dict]:
         """Authenticates the request with the token"""

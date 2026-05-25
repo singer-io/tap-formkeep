@@ -15,6 +15,7 @@ default_config = {
 
 DEFAULT_REQUEST_TIMEOUT = 300
 
+
 class MockResponse:
     """Mocked standard HTTPResponse to test error handling."""
 
@@ -47,6 +48,7 @@ class MockResponse:
         """Returns a JSON object of the result."""
         return self.text
 
+
 class TestClient(unittest.TestCase):
 
     def setUp(self):
@@ -67,7 +69,6 @@ class TestClient(unittest.TestCase):
         assert client.request_timeout == expected_value
         assert isinstance(client._session, mock_session().__class__)
 
-
     @parameterized.expand([
         ["400 error", 400, MockResponse(400), formkeepBadRequestError, "A validation exception has occurred."],
         ["401 error", 401, MockResponse(401), formkeepUnauthorizedError, "The access token provided is expired, revoked, malformed or invalid for other reasons."],
@@ -76,7 +77,7 @@ class TestClient(unittest.TestCase):
         ["409 error", 409, MockResponse(409), formkeepConflictError, "The API request cannot be completed because the requested operation would conflict with an existing item."],
     ])
     def test_make_request_http_failure_without_retry(self, test_name, error_code, mock_response, error, error_message):
-        
+
         with patch.object(self.client._session, "request", return_value=mock_response):
             with self.assertRaises(error) as e:
                 self.client._Client__make_request("GET", "https://api.example.com/resource")
@@ -94,7 +95,7 @@ class TestClient(unittest.TestCase):
     ])
     @patch("time.sleep")
     def test_make_request_http_failure_with_retry(self, test_name, error_code, mock_response, error, error_message, mock_sleep):
-        
+
         with patch.object(self.client._session, "request", return_value=mock_response) as mock_request:
             with self.assertRaises(error) as e:
                 self.client._Client__make_request("GET", "https://api.example.com/resource")
@@ -102,6 +103,48 @@ class TestClient(unittest.TestCase):
             expected_error_message = (f"HTTP-error-code: {error_code}, Error: {error_message}")
             self.assertEqual(str(e.exception), expected_error_message)
             self.assertEqual(mock_request.call_count, 5)
+
+    # -------------------------------------------------------
+    # Tests for check_api_credentials
+    # -------------------------------------------------------
+
+    @parameterized.expand([
+        ["missing form_ids key", {}],
+        ["empty string form_ids", {"form_ids": ""}]
+    ])
+    def test_check_api_credentials_raises_bad_request_when_form_ids_missing(
+        self, test_name, extra_config
+    ):
+        config = {**default_config, **extra_config}
+        client = Client(config)
+        with self.assertRaises(formkeepBadRequestError) as ctx:
+            client.check_api_credentials()
+        self.assertIn("form_ids is required", str(ctx.exception))
+
+    @patch("tap_formkeep.client.Client.make_request")
+    def test_check_api_credentials_success(self, mock_make_request):
+        mock_make_request.return_value = {"submissions": []}
+        config = {**default_config, "form_ids": "form_1, form_2"}
+        client = Client(config)
+        # Should not raise
+        client.check_api_credentials()
+        mock_make_request.assert_called_once_with(
+            method="GET",
+            endpoint="https://formkeep.com/api/v1/forms/form_1/submissions.json",
+            params={"page": 1, "include_attachments": "true"},
+        )
+
+    @patch("tap_formkeep.client.Client.make_request")
+    def test_check_api_credentials_uses_first_form_id_only(self, mock_make_request):
+        mock_make_request.return_value = {"submissions": []}
+        config = {**default_config, "form_ids": "abc, def, ghi"}
+        client = Client(config)
+        client.check_api_credentials()
+        # Only the first form_id should be used for the credential check
+        call_endpoint = mock_make_request.call_args[1]["endpoint"]
+        self.assertIn("abc", call_endpoint)
+        self.assertNotIn("def", call_endpoint)
+        self.assertNotIn("ghi", call_endpoint)
 
     @parameterized.expand([
         ["ConnectionResetError", ConnectionResetError],
@@ -111,9 +154,9 @@ class TestClient(unittest.TestCase):
     ])
     @patch("time.sleep")
     def test_make_request_other_failure_with_retry(self, test_name, error, mock_sleep):
-        
+
         with patch.object(self.client._session, "request", side_effect=error) as mock_request:
             with self.assertRaises(error) as e:
                 self.client._Client__make_request("GET", "https://api.example.com/resource")
-            
+
             self.assertEqual(mock_request.call_count, 5)
