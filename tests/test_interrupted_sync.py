@@ -19,7 +19,7 @@ class formkeepInterruptedSyncTest(InterruptedSyncTest, formkeepBaseTest):
         return {
             "currently_syncing": "5e5ee5b14b02",
             "bookmarks": {
-                "5e5ee5b14b02": { "created_at" : "2020-01-01T00:00:00Z"},
-                "a934600be226": { "created_at" : "2020-01-01T00:00:00Z"},
+                "5e5ee5b14b02": { "created_at" : "2026-05-26T06:30:00Z"},
+                "a934600be226": { "created_at" : "2026-05-26T06:30:00Z"},
         }
     }
