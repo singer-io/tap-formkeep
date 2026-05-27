@@ -72,7 +72,7 @@ class TestClient(unittest.TestCase):
     @parameterized.expand([
         ["400 error", 400, MockResponse(400), formkeepBadRequestError, "A validation exception has occurred."],
         ["401 error", 401, MockResponse(401), formkeepUnauthorizedError, "The access token provided is expired, revoked, malformed or invalid for other reasons."],
-        ["403 error", 403, MockResponse(403), formkeepForbiddenError, "You are missing the following required scopes: read"],
+        ["403 error", 403, MockResponse(403), formkeepForbiddenError, "Unauthorized to access the requested resource due to insufficient permissions or Rate-limit"],
         ["404 error", 404, MockResponse(404), formkeepNotFoundError, "The resource you have specified cannot be found."],
         ["409 error", 409, MockResponse(409), formkeepConflictError, "The API request cannot be completed because the requested operation would conflict with an existing item."],
     ])

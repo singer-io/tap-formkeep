@@ -67,7 +67,7 @@ ERROR_CODE_EXCEPTION_MAPPING = {
     },
     403: {
         "raise_exception": formkeepForbiddenError,
-        "message": "You are missing the following required scopes: read"
+        "message": "Unauthorized to access the requested resource due to insufficient permissions or Rate-limit"
     },
     404: {
         "raise_exception": formkeepNotFoundError,
