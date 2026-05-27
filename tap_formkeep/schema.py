@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 import singer
 from singer import metadata
 
-from tap_formkeep.exceptions import formkeepUnprocessableEntityError
+from tap_formkeep.exceptions import formkeepBadRequestError, formkeepUnprocessableEntityError
 from tap_formkeep.streams import STREAMS
 from tap_formkeep.utils import sanitize_field_name
 
@@ -144,6 +144,7 @@ def infer_type(value):
 def get_dynamic_schema(client, config):
     schemas = {}
     field_metadata = {}
+    forms_without_submissions = []
     invalid_forms = []
 
     raw_ids = config.get("form_ids", "")
@@ -155,16 +156,21 @@ def get_dynamic_schema(client, config):
         form_ids = raw_ids
 
     for form_id in form_ids:
-        response = client.make_request(
-            method="GET",
-            endpoint=client.base_url.format(form_id=form_id),
-            params={"page": 1, "include_attachments": "true"},
-        )
+        try:
+            response = client.make_request(
+                method="GET",
+                endpoint=client.base_url.format(form_id=form_id),
+                params={"page": 1, "include_attachments": "true"},
+            )
+        except Exception as err:
+            LOGGER.error(f"Error fetching submissions for form_id: {form_id}. Error: {str(err)}")
+            invalid_forms.append(form_id)
+            continue
 
         submissions = response.get("submissions", [])
         if not submissions:
             LOGGER.warning(f"No submissions found for form_id: {form_id}. Skipping schema inference for this form.")
-            invalid_forms.append(form_id)
+            forms_without_submissions.append(form_id)
             continue
 
         first_submission = submissions[0]
@@ -206,7 +212,12 @@ def get_dynamic_schema(client, config):
         field_metadata[form_id] = metadata.to_list(mdata)
 
     if invalid_forms:
-        error_message = f"No submissions found for form_ids: {', '.join(invalid_forms)}. Please check the configuration."
+        error_message = f"Invalid forms detected: {', '.join(invalid_forms)}. Please check the configuration."
+        LOGGER.error(error_message)
+        raise formkeepBadRequestError(error_message)
+
+    if forms_without_submissions:
+        error_message = f"Forms without submissions: {', '.join(forms_without_submissions)}. Please check the configuration"
         LOGGER.error(error_message)
         raise formkeepUnprocessableEntityError(error_message)
 

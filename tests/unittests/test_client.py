@@ -92,7 +92,7 @@ class TestClient(unittest.TestCase):
                 self.client._Client__make_request("GET", "https://api.example.com/resource")
 
         expected_error_message = (
-            f"HTTP-error-code: {error_code}, Error: {error_message}, Form ID: test_form_id"
+            f"HTTP-error-code: {error_code}, Error: {error_message}"
         )
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -112,7 +112,7 @@ class TestClient(unittest.TestCase):
                 self.client._Client__make_request("GET", "https://api.example.com/resource")
 
             expected_error_message = (
-                f"HTTP-error-code: {error_code}, Error: {error_message}, Form ID: test_form_id"
+                f"HTTP-error-code: {error_code}, Error: {error_message}"
             )
             self.assertEqual(str(e.exception), expected_error_message)
             self.assertEqual(mock_request.call_count, 5)

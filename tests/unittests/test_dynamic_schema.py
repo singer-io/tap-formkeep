@@ -1,7 +1,10 @@
 import unittest
 from unittest.mock import MagicMock
 from tap_formkeep.schema import get_dynamic_schema
-from tap_formkeep.exceptions import formkeepUnprocessableEntityError
+from tap_formkeep.exceptions import (
+    formkeepBadRequestError,
+    formkeepUnprocessableEntityError,
+)
 
 
 class TestGetDynamicSchema(unittest.TestCase):
@@ -131,11 +134,11 @@ class TestGetDynamicSchema(unittest.TestCase):
 
         self.assertIn("test_form", field_metadata)
     # -------------------------------------------------------
-    # Tests for no-submissions error handling
+    # forms_without_submissions → formkeepUnprocessableEntityError
     # -------------------------------------------------------
 
-    def test_get_dynamic_schema_raises_on_no_submissions(self):
-        """Raise formkeepUnprocessableEntityError when the only form has no submissions."""
+    def test_raises_unprocessable_when_only_form_has_no_submissions(self):
+        """formkeepUnprocessableEntityError when single form returns empty list."""
         self.client.make_request.return_value = {"submissions": []}
 
         with self.assertRaises(formkeepUnprocessableEntityError) as ctx:
@@ -143,48 +146,105 @@ class TestGetDynamicSchema(unittest.TestCase):
 
         self.assertIn("empty_form", str(ctx.exception))
 
-    def test_get_dynamic_schema_raises_on_missing_submissions_key(self):
-        """Raise formkeepUnprocessableEntityError when response has no submissions key."""
+    def test_raises_unprocessable_when_submissions_key_missing(self):
+        """formkeepUnprocessableEntityError when response has no submissions key."""
         self.client.make_request.return_value = {}
 
         with self.assertRaises(formkeepUnprocessableEntityError):
             get_dynamic_schema(self.client, {"form_ids": "empty_form"})
 
-    def test_get_dynamic_schema_partial_failure_raises(self):
-        """Raise formkeepUnprocessableEntityError when any form_id has no submissions.
-
-        The code raises after the full loop if the invalid_forms list is non-empty,
-        even if some form_ids returned data successfully.
-        """
-        valid_submission = {
-            "id": 1, "created_at": "2025-01-01T00:00:00Z",
-            "spam": False, "data": {"name": "Alice"}
-        }
-        responses = [
-            {"submissions": []},                    # form_1 → no data
-            {"submissions": [valid_submission]},     # form_2 → valid
-        ]
-        self.client.make_request.side_effect = responses
-
-        # Raises because form_1 had no data
-        with self.assertRaises(formkeepUnprocessableEntityError) as ctx:
-            get_dynamic_schema(self.client, {"form_ids": "form_1, form_2"})
-
-        # Both requests were still made before raising
-        self.assertEqual(self.client.make_request.call_count, 2)
-        self.assertIn("form_1", str(ctx.exception))
-
-    def test_get_dynamic_schema_all_form_ids_empty_raises(self):
-        """Raise formkeepUnprocessableEntityError when every form_id returns no submissions."""
+    def test_raises_unprocessable_when_all_forms_have_no_submissions(self):
+        """formkeepUnprocessableEntityError lists all form_ids with no submissions."""
         self.client.make_request.return_value = {"submissions": []}
 
         with self.assertRaises(formkeepUnprocessableEntityError) as ctx:
             get_dynamic_schema(self.client, {"form_ids": "form_1, form_2"})
 
-        # Both requests were still made before raising
         self.assertEqual(self.client.make_request.call_count, 2)
         self.assertIn("form_1", str(ctx.exception))
         self.assertIn("form_2", str(ctx.exception))
+
+    def test_raises_unprocessable_for_partial_empty_submissions(self):
+        """formkeepUnprocessableEntityError even when only one of many forms is empty.
+
+        The loop completes for all form_ids; forms_without_submissions is
+        populated for form_1 but form_2 builds a schema. After the loop,
+        formkeepUnprocessableEntityError is raised listing form_1.
+        """
+        valid_submission = {
+            "id": 1, "created_at": "2025-01-01T00:00:00Z",
+            "spam": False, "data": {"name": "Alice"}
+        }
+        self.client.make_request.side_effect = [
+            {"submissions": []},                 # form_1 → empty
+            {"submissions": [valid_submission]}, # form_2 → valid
+        ]
+
+        with self.assertRaises(formkeepUnprocessableEntityError) as ctx:
+            get_dynamic_schema(self.client, {"form_ids": "form_1, form_2"})
+
+        self.assertEqual(self.client.make_request.call_count, 2)
+        self.assertIn("form_1", str(ctx.exception))
+        self.assertNotIn("form_2", str(ctx.exception))
+
+    # -------------------------------------------------------
+    # invalid_forms → formkeepBadRequestError
+    # -------------------------------------------------------
+
+    def test_raises_bad_request_when_make_request_throws(self):
+        """formkeepBadRequestError when make_request raises for a form_id."""
+        self.client.make_request.side_effect = Exception("connection refused")
+
+        with self.assertRaises(formkeepBadRequestError) as ctx:
+            get_dynamic_schema(self.client, {"form_ids": "bad_form"})
+
+        self.assertIn("bad_form", str(ctx.exception))
+
+    def test_raises_bad_request_lists_all_failing_form_ids(self):
+        """formkeepBadRequestError lists every form_id whose request failed."""
+        self.client.make_request.side_effect = Exception("timeout")
+
+        with self.assertRaises(formkeepBadRequestError) as ctx:
+            get_dynamic_schema(self.client, {"form_ids": "form_a, form_b"})
+
+        self.assertEqual(self.client.make_request.call_count, 2)
+        self.assertIn("form_a", str(ctx.exception))
+        self.assertIn("form_b", str(ctx.exception))
+
+    def test_bad_request_takes_priority_over_unprocessable(self):
+        """formkeepBadRequestError raised before formkeepUnprocessableEntityError.
+
+        invalid_forms check comes first in schema.py; if one form errors
+        and another has no submissions, BadRequest is raised, not Unprocessable.
+        """
+        valid_submission = {
+            "id": 1, "created_at": "2025-01-01T00:00:00Z",
+            "spam": False, "data": {"name": "Alice"}
+        }
+        self.client.make_request.side_effect = [
+            Exception("403 forbidden"),           # form_1 → invalid
+            {"submissions": []},                  # form_2 → no data
+            {"submissions": [valid_submission]},  # form_3 → valid
+        ]
+
+        with self.assertRaises(formkeepBadRequestError) as ctx:
+            get_dynamic_schema(
+                self.client, {"form_ids": "form_1, form_2, form_3"}
+            )
+
+        self.assertIn("form_1", str(ctx.exception))
+
+    def test_make_request_called_for_all_form_ids_before_raising(self):
+        """All form_ids are attempted before any exception is raised."""
+        self.client.make_request.side_effect = Exception("error")
+
+        with self.assertRaises(formkeepBadRequestError):
+            get_dynamic_schema(
+                self.client, {"form_ids": "form_1, form_2, form_3"}
+            )
+
+        # All 3 must be attempted
+        self.assertEqual(self.client.make_request.call_count, 3)
 
     def test_get_dynamic_schema_multiple_form_ids_success(self):
         """Build schema for every form_id when all return submissions."""
