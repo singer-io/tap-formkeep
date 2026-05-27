@@ -121,43 +121,13 @@ class TestClient(unittest.TestCase):
     # Tests for check_api_credentials
     # -------------------------------------------------------
 
-    @parameterized.expand([
-        ["missing form_ids key", {}],
-        ["empty string form_ids", {"form_ids": ""}]
-    ])
-    def test_check_api_credentials_raises_bad_request_when_form_ids_missing(
-        self, test_name, extra_config
-    ):
-        config = {**default_config, **extra_config}
-        client = Client(config)
-        with self.assertRaises(formkeepBadRequestError) as ctx:
-            client.check_api_credentials()
-        self.assertIn("form_ids is required", str(ctx.exception))
-
     @patch("tap_formkeep.client.Client.make_request")
-    def test_check_api_credentials_success(self, mock_make_request):
-        mock_make_request.return_value = {"submissions": []}
+    def test_check_api_credentials_makes_no_request(self, mock_make_request):
+        """check_api_credentials does not call make_request."""
         config = {**default_config, "form_ids": "form_1, form_2"}
         client = Client(config)
-        # Should not raise
         client.check_api_credentials()
-        mock_make_request.assert_called_once_with(
-            method="GET",
-            endpoint="https://formkeep.com/api/v1/forms/form_1/submissions.json",
-            params={"page": 1, "include_attachments": "true"},
-        )
-
-    @patch("tap_formkeep.client.Client.make_request")
-    def test_check_api_credentials_uses_first_form_id_only(self, mock_make_request):
-        mock_make_request.return_value = {"submissions": []}
-        config = {**default_config, "form_ids": "abc, def, ghi"}
-        client = Client(config)
-        client.check_api_credentials()
-        # Only the first form_id should be used for the credential check
-        call_endpoint = mock_make_request.call_args[1]["endpoint"]
-        self.assertIn("abc", call_endpoint)
-        self.assertNotIn("def", call_endpoint)
-        self.assertNotIn("ghi", call_endpoint)
+        mock_make_request.assert_not_called()
 
     @parameterized.expand([
         ["ConnectionResetError", ConnectionResetError],

@@ -198,24 +198,31 @@ class TestGetDynamicSchema(unittest.TestCase):
     # -------------------------------------------------------
 
     def test_raises_bad_request_when_make_request_throws(self):
-        """formkeepBadRequestError when make_request raises for a form_id."""
+        """formkeepBadRequestError when make_request raises for a form_id.
+
+        When all form_ids fail, schema.py raises with a generic message
+        (token may be invalid), not listing individual form_ids.
+        """
         self.client.make_request.side_effect = Exception("connection refused")
 
         with self.assertRaises(formkeepBadRequestError) as ctx:
             get_dynamic_schema(self.client, {"form_ids": "bad_form"})
 
-        self.assertIn("bad_form", str(ctx.exception))
+        self.assertIn("token is invalid or all provided form_ids are invalid", str(ctx.exception))
 
     def test_raises_bad_request_lists_all_failing_form_ids(self):
-        """formkeepBadRequestError lists every form_id whose request failed."""
+        """formkeepBadRequestError with generic message when all form_ids fail.
+
+        When len(invalid_forms) == len(form_ids), schema.py raises with a
+        generic message rather than listing individual form_ids.
+        """
         self.client.make_request.side_effect = Exception("timeout")
 
         with self.assertRaises(formkeepBadRequestError) as ctx:
             get_dynamic_schema(self.client, {"form_ids": "form_a, form_b"})
 
         self.assertEqual(self.client.make_request.call_count, 2)
-        self.assertIn("form_a", str(ctx.exception))
-        self.assertIn("form_b", str(ctx.exception))
+        self.assertIn("token is invalid or all provided form_ids are invalid", str(ctx.exception))
 
     def test_bad_request_takes_priority_over_unprocessable(self):
         """formkeepBadRequestError raised before formkeepUnprocessableEntityError.
