@@ -144,7 +144,7 @@ class TestGetDynamicSchema(unittest.TestCase):
         with self.assertRaises(formkeepUnprocessableEntityError) as ctx:
             get_dynamic_schema(self.client, {"form_ids": "empty_form"})
 
-        self.assertIn("empty_form", str(ctx.exception))
+        self.assertIn("No submissions found", str(ctx.exception))
 
     def test_raises_unprocessable_when_submissions_key_missing(self):
         """formkeepUnprocessableEntityError when response has no submissions key."""
@@ -154,38 +154,44 @@ class TestGetDynamicSchema(unittest.TestCase):
             get_dynamic_schema(self.client, {"form_ids": "empty_form"})
 
     def test_raises_unprocessable_when_all_forms_have_no_submissions(self):
-        """formkeepUnprocessableEntityError lists all form_ids with no submissions."""
+        """formkeepUnprocessableEntityError with generic message when all forms are empty.
+
+        The error message is generic (no individual form_ids listed) because
+        schema.py only checks len(forms_without_submissions) == len(form_ids).
+        """
         self.client.make_request.return_value = {"submissions": []}
 
         with self.assertRaises(formkeepUnprocessableEntityError) as ctx:
             get_dynamic_schema(self.client, {"form_ids": "form_1, form_2"})
 
         self.assertEqual(self.client.make_request.call_count, 2)
-        self.assertIn("form_1", str(ctx.exception))
-        self.assertIn("form_2", str(ctx.exception))
+        self.assertIn("No submissions found for any of the forms", str(ctx.exception))
 
-    def test_raises_unprocessable_for_partial_empty_submissions(self):
-        """formkeepUnprocessableEntityError even when only one of many forms is empty.
+    def test_partial_empty_submissions_does_not_raise(self):
+        """No exception when at least one form_id returns valid submissions.
 
-        The loop completes for all form_ids; forms_without_submissions is
-        populated for form_1 but form_2 builds a schema. After the loop,
-        formkeepUnprocessableEntityError is raised listing form_1.
+        schema.py only raises formkeepUnprocessableEntityError when
+        len(forms_without_submissions) == len(form_ids). If some forms are
+        valid, the empty ones are silently skipped and only valid schemas
+        are returned.
         """
         valid_submission = {
             "id": 1, "created_at": "2025-01-01T00:00:00Z",
             "spam": False, "data": {"name": "Alice"}
         }
         self.client.make_request.side_effect = [
-            {"submissions": []},                 # form_1 → empty
-            {"submissions": [valid_submission]}, # form_2 → valid
+            {"submissions": []},                 # form_1 → empty, skipped
+            {"submissions": [valid_submission]}, # form_2 → valid, included
         ]
 
-        with self.assertRaises(formkeepUnprocessableEntityError) as ctx:
-            get_dynamic_schema(self.client, {"form_ids": "form_1, form_2"})
+        schemas, field_metadata = get_dynamic_schema(
+            self.client, {"form_ids": "form_1, form_2"}
+        )
 
         self.assertEqual(self.client.make_request.call_count, 2)
-        self.assertIn("form_1", str(ctx.exception))
-        self.assertNotIn("form_2", str(ctx.exception))
+        self.assertNotIn("form_1", schemas)
+        self.assertIn("form_2", schemas)
+        self.assertIn("form_2", field_metadata)
 
     # -------------------------------------------------------
     # invalid_forms → formkeepBadRequestError

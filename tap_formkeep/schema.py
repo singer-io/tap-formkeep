@@ -216,8 +216,8 @@ def get_dynamic_schema(client, config):
         LOGGER.error(error_message)
         raise formkeepBadRequestError(error_message)
 
-    if forms_without_submissions:
-        error_message = f"Forms without submissions: {', '.join(forms_without_submissions)}. Please check the configuration"
+    if len(forms_without_submissions) == len(form_ids):
+        error_message = "No submissions found for any of the forms. Please check the configuration."
         LOGGER.error(error_message)
         raise formkeepUnprocessableEntityError(error_message)
 
