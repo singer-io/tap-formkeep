@@ -16,11 +16,18 @@ default_config = {
 DEFAULT_REQUEST_TIMEOUT = 300
 
 
+class MockRequest:
+    """Mocked request object attached to a response."""
+    def __init__(self, url="https://formkeep.com/api/v1/forms/test_form_id/submissions.json"):
+        self.url = url
+
+
 class MockResponse:
     """Mocked standard HTTPResponse to test error handling."""
 
     def __init__(
-        self, status_code, resp = "", content=[""], headers=None, raise_error=True, text={}
+        self, status_code, resp="", content=[""], headers=None, raise_error=True, text={},
+        url="https://formkeep.com/api/v1/forms/test_form_id/submissions.json"
     ):
         self.json_data = resp
         self.status_code = status_code
@@ -29,6 +36,8 @@ class MockResponse:
         self.raise_error = raise_error
         self.text = text
         self.reason = "error"
+        self.url = url
+        self.request = MockRequest(url)
 
     def raise_for_status(self):
         """If an error occur, this method returns a HTTPError object.
@@ -72,7 +81,7 @@ class TestClient(unittest.TestCase):
     @parameterized.expand([
         ["400 error", 400, MockResponse(400), formkeepBadRequestError, "A validation exception has occurred."],
         ["401 error", 401, MockResponse(401), formkeepUnauthorizedError, "The access token provided is expired, revoked, malformed or invalid for other reasons."],
-        ["403 error", 403, MockResponse(403), formkeepForbiddenError, "Unauthorized to access the requested resource due to insufficient permissions or Rate-limit"],
+        ["403 error", 403, MockResponse(403), formkeepForbiddenError, "Invalid form_id or insufficient permissions to access the requested resource"],
         ["404 error", 404, MockResponse(404), formkeepNotFoundError, "The resource you have specified cannot be found."],
         ["409 error", 409, MockResponse(409), formkeepConflictError, "The API request cannot be completed because the requested operation would conflict with an existing item."],
     ])
@@ -82,7 +91,9 @@ class TestClient(unittest.TestCase):
             with self.assertRaises(error) as e:
                 self.client._Client__make_request("GET", "https://api.example.com/resource")
 
-        expected_error_message = (f"HTTP-error-code: {error_code}, Error: {error_message}")
+        expected_error_message = (
+            f"HTTP-error-code: {error_code}, Error: {error_message}, Form ID: test_form_id"
+        )
         self.assertEqual(str(e.exception), expected_error_message)
 
     @parameterized.expand([
@@ -100,7 +111,9 @@ class TestClient(unittest.TestCase):
             with self.assertRaises(error) as e:
                 self.client._Client__make_request("GET", "https://api.example.com/resource")
 
-            expected_error_message = (f"HTTP-error-code: {error_code}, Error: {error_message}")
+            expected_error_message = (
+                f"HTTP-error-code: {error_code}, Error: {error_message}, Form ID: test_form_id"
+            )
             self.assertEqual(str(e.exception), expected_error_message)
             self.assertEqual(mock_request.call_count, 5)
 

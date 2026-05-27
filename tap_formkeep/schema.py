@@ -144,6 +144,7 @@ def infer_type(value):
 def get_dynamic_schema(client, config):
     schemas = {}
     field_metadata = {}
+    invalid_forms = []
 
     raw_ids = config.get("form_ids", "")
     raw_ids = [id.strip() for id in raw_ids.split(",")]
@@ -162,9 +163,9 @@ def get_dynamic_schema(client, config):
 
         submissions = response.get("submissions", [])
         if not submissions:
-            error_message = "No submissions found or data must have been expired for form_id: {}. Please re-check configuration".format(form_id)
-            LOGGER.error(error_message)
-            raise formkeepUnprocessableEntityError(error_message)
+            LOGGER.warning(f"No submissions found for form_id: {form_id}. Skipping schema inference for this form.")
+            invalid_forms.append(form_id)
+            continue
 
         first_submission = submissions[0]
         data_obj = first_submission.get("data", {})
@@ -203,5 +204,10 @@ def get_dynamic_schema(client, config):
             mdata, ('properties', "created_at"), 'inclusion', 'automatic'
         )
         field_metadata[form_id] = metadata.to_list(mdata)
+
+    if invalid_forms:
+        error_message = f"No submissions found for form_ids: {', '.join(invalid_forms)}. Please check the configuration."
+        LOGGER.error(error_message)
+        raise formkeepUnprocessableEntityError(error_message)
 
     return schemas, field_metadata

@@ -67,7 +67,7 @@ ERROR_CODE_EXCEPTION_MAPPING = {
     },
     403: {
         "raise_exception": formkeepForbiddenError,
-        "message": "Unauthorized to access the requested resource due to insufficient permissions or Rate-limit"
+        "message": "Invalid form_id or insufficient permissions to access the requested resource"
     },
     404: {
         "raise_exception": formkeepNotFoundError,

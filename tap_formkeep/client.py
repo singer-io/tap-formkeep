@@ -31,7 +31,11 @@ def raise_for_error(response: requests.Response) -> None:
             error_message = ERROR_CODE_EXCEPTION_MAPPING.get(
                 response.status_code, {}
             ).get("message", "Unknown Error")
-            message = f"HTTP-error-code: {response.status_code}, Error: {response_json.get('message', error_message)}"
+
+            # Added form_id from URL for better debugging of which form_id is causing the error. If URL is not present, default to "unknown".
+            form_id = response.request.url.split("/")[-2] if response.request.url else "unknown"
+
+            message = f"HTTP-error-code: {response.status_code}, Error: {response_json.get('message', error_message)}, Form ID: {form_id}"
         exc = ERROR_CODE_EXCEPTION_MAPPING.get(response.status_code, {}).get(
             "raise_exception", formkeepError
         )
@@ -141,4 +145,3 @@ class Client:
                 raise ValueError(f"Unsupported method: {method}")
 
         return response.json()
-
