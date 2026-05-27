@@ -211,6 +211,11 @@ def get_dynamic_schema(client, config):
         )
         field_metadata[form_id] = metadata.to_list(mdata)
 
+    if len(invalid_forms) == len(form_ids):
+        error_message = "Either token is invalid or all provided form_ids are invalid. Please check the configuration."
+        LOGGER.error(error_message)
+        raise formkeepBadRequestError(error_message)
+
     if invalid_forms:
         error_message = f"Invalid forms detected: {', '.join(invalid_forms)}. Please check the configuration."
         LOGGER.error(error_message)
