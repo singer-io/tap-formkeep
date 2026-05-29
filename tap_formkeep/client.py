@@ -6,11 +6,12 @@ from requests import session
 from requests.exceptions import Timeout, ConnectionError, ChunkedEncodingError
 from singer import get_logger, metrics
 
-from tap_formkeep.exceptions import ERROR_CODE_EXCEPTION_MAPPING, formkeepError, formkeepBackoffError
+from tap_formkeep.exceptions import ERROR_CODE_EXCEPTION_MAPPING, formkeepBadRequestError, formkeepError, formkeepBackoffError
 
 LOGGER = get_logger()
 REQUEST_TIMEOUT = 300
 DEFAULT_USER_AGENT = 'Singer.io FormKeep Tap'
+
 
 def raise_for_error(response: requests.Response) -> None:
     """Raises the associated response exception. Takes in a response object,
@@ -30,11 +31,13 @@ def raise_for_error(response: requests.Response) -> None:
             error_message = ERROR_CODE_EXCEPTION_MAPPING.get(
                 response.status_code, {}
             ).get("message", "Unknown Error")
+
             message = f"HTTP-error-code: {response.status_code}, Error: {response_json.get('message', error_message)}"
         exc = ERROR_CODE_EXCEPTION_MAPPING.get(response.status_code, {}).get(
             "raise_exception", formkeepError
         )
         raise exc(message, response) from None
+
 
 class Client:
     """
@@ -123,4 +126,3 @@ class Client:
                 raise ValueError(f"Unsupported method: {method}")
 
         return response.json()
-

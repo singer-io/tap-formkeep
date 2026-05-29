@@ -1,6 +1,10 @@
 import unittest
 from unittest.mock import MagicMock
 from tap_formkeep.schema import get_dynamic_schema
+from tap_formkeep.exceptions import (
+    formkeepBadRequestError,
+    formkeepUnprocessableEntityError,
+)
 
 
 class TestGetDynamicSchema(unittest.TestCase):
@@ -129,3 +133,148 @@ class TestGetDynamicSchema(unittest.TestCase):
         )
 
         self.assertIn("test_form", field_metadata)
+    # -------------------------------------------------------
+    # forms_without_submissions → formkeepUnprocessableEntityError
+    # -------------------------------------------------------
+
+    def test_raises_unprocessable_when_only_form_has_no_submissions(self):
+        """formkeepUnprocessableEntityError when single form returns empty list."""
+        self.client.make_request.return_value = {"submissions": []}
+
+        with self.assertRaises(formkeepUnprocessableEntityError) as ctx:
+            get_dynamic_schema(self.client, {"form_ids": "empty_form"})
+
+        self.assertIn("No submissions found", str(ctx.exception))
+
+    def test_raises_unprocessable_when_submissions_key_missing(self):
+        """formkeepUnprocessableEntityError when response has no submissions key."""
+        self.client.make_request.return_value = {}
+
+        with self.assertRaises(formkeepUnprocessableEntityError):
+            get_dynamic_schema(self.client, {"form_ids": "empty_form"})
+
+    def test_raises_unprocessable_when_all_forms_have_no_submissions(self):
+        """formkeepUnprocessableEntityError with generic message when all forms are empty.
+
+        The error message is generic (no individual form_ids listed) because
+        schema.py only checks len(forms_without_submissions) == len(form_ids).
+        """
+        self.client.make_request.return_value = {"submissions": []}
+
+        with self.assertRaises(formkeepUnprocessableEntityError) as ctx:
+            get_dynamic_schema(self.client, {"form_ids": "form_1, form_2"})
+
+        self.assertEqual(self.client.make_request.call_count, 2)
+        self.assertIn("No submissions found for any of the forms", str(ctx.exception))
+
+    def test_partial_empty_submissions_does_not_raise(self):
+        """No exception when at least one form_id returns valid submissions.
+
+        schema.py only raises formkeepUnprocessableEntityError when
+        len(forms_without_submissions) == len(form_ids). If some forms are
+        valid, the empty ones are silently skipped and only valid schemas
+        are returned.
+        """
+        valid_submission = {
+            "id": 1, "created_at": "2025-01-01T00:00:00Z",
+            "spam": False, "data": {"name": "Alice"}
+        }
+        self.client.make_request.side_effect = [
+            {"submissions": []},                 # form_1 → empty, skipped
+            {"submissions": [valid_submission]}, # form_2 → valid, included
+        ]
+
+        schemas, field_metadata = get_dynamic_schema(
+            self.client, {"form_ids": "form_1, form_2"}
+        )
+
+        self.assertEqual(self.client.make_request.call_count, 2)
+        self.assertNotIn("form_1", schemas)
+        self.assertIn("form_2", schemas)
+        self.assertIn("form_2", field_metadata)
+
+    # -------------------------------------------------------
+    # invalid_forms → formkeepBadRequestError
+    # -------------------------------------------------------
+
+    def test_raises_bad_request_when_make_request_throws(self):
+        """formkeepBadRequestError when make_request raises for a form_id.
+
+        When all form_ids fail, schema.py raises with a generic message
+        (token may be invalid), not listing individual form_ids.
+        """
+        self.client.make_request.side_effect = Exception("connection refused")
+
+        with self.assertRaises(formkeepBadRequestError) as ctx:
+            get_dynamic_schema(self.client, {"form_ids": "bad_form"})
+
+        self.assertIn("token is invalid or all provided form_ids are invalid", str(ctx.exception))
+
+    def test_raises_bad_request_lists_all_failing_form_ids(self):
+        """formkeepBadRequestError with generic message when all form_ids fail.
+
+        When len(invalid_forms) == len(form_ids), schema.py raises with a
+        generic message rather than listing individual form_ids.
+        """
+        self.client.make_request.side_effect = Exception("timeout")
+
+        with self.assertRaises(formkeepBadRequestError) as ctx:
+            get_dynamic_schema(self.client, {"form_ids": "form_a, form_b"})
+
+        self.assertEqual(self.client.make_request.call_count, 2)
+        self.assertIn("token is invalid or all provided form_ids are invalid", str(ctx.exception))
+
+    def test_bad_request_takes_priority_over_unprocessable(self):
+        """formkeepBadRequestError raised before formkeepUnprocessableEntityError.
+
+        invalid_forms check comes first in schema.py; if one form errors
+        and another has no submissions, BadRequest is raised, not Unprocessable.
+        """
+        valid_submission = {
+            "id": 1, "created_at": "2025-01-01T00:00:00Z",
+            "spam": False, "data": {"name": "Alice"}
+        }
+        self.client.make_request.side_effect = [
+            Exception("403 forbidden"),           # form_1 → invalid
+            {"submissions": []},                  # form_2 → no data
+            {"submissions": [valid_submission]},  # form_3 → valid
+        ]
+
+        with self.assertRaises(formkeepBadRequestError) as ctx:
+            get_dynamic_schema(
+                self.client, {"form_ids": "form_1, form_2, form_3"}
+            )
+
+        self.assertIn("form_1", str(ctx.exception))
+
+    def test_make_request_called_for_all_form_ids_before_raising(self):
+        """All form_ids are attempted before any exception is raised."""
+        self.client.make_request.side_effect = Exception("error")
+
+        with self.assertRaises(formkeepBadRequestError):
+            get_dynamic_schema(
+                self.client, {"form_ids": "form_1, form_2, form_3"}
+            )
+
+        # All 3 must be attempted
+        self.assertEqual(self.client.make_request.call_count, 3)
+
+    def test_get_dynamic_schema_multiple_form_ids_success(self):
+        """Build schema for every form_id when all return submissions."""
+        submission = {
+            "id": 1,
+            "created_at": "2025-01-01T00:00:00Z",
+            "spam": False,
+            "data": {"name": "Alice", "age": 30},
+        }
+        self.client.make_request.return_value = {"submissions": [submission]}
+
+        schemas, field_metadata = get_dynamic_schema(
+            self.client, {"form_ids": "form_a, form_b"}
+        )
+
+        self.assertIn("form_a", schemas)
+        self.assertIn("form_b", schemas)
+        self.assertIn("form_a", field_metadata)
+        self.assertIn("form_b", field_metadata)
+        self.assertEqual(self.client.make_request.call_count, 2)

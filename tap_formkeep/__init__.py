@@ -9,6 +9,7 @@ LOGGER = singer.get_logger()
 
 REQUIRED_CONFIG_KEYS = ['api_token', 'form_ids', 'start_date']
 
+
 def do_discover(client, config):
     """
     Discover and emit the catalog to stdout
@@ -42,4 +43,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
