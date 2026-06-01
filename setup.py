@@ -11,8 +11,8 @@ setup(name="tap-formkeep",
       classifiers=["Programming Language :: Python :: 3 :: Only"],
       py_modules=["tap_formkeep"],
       install_requires=[
-        "singer-python==6.3.0",
-        "requests==2.32.5",
+        "singer-python==6.8.0",
+        "requests==2.34.2",
         "backoff==2.2.1"
       ],
       extras_require={'dev': ['parameterized']},
